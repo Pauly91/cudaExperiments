@@ -29,7 +29,6 @@ __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quan
 
         
         int i = 0;
-        float temp = 0;
         __shared__ float ATX[N*N];
         for (i = 0; i < N*N; ++i)
         {
@@ -38,52 +37,42 @@ __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quan
 
         __syncthreads();
 
-        printf("id: %d\n",thread_1D_pos);
         for (i = 0; i < N; ++i)
         {
-                // printf("-->threadIdx.x:%d threadIdx.y:%d index1: %d index2: %d  index3: %d i:%d\n",
-                //     threadIdx.x,threadIdx.y,threadIdx.y * blockDim.x + threadIdx.x,threadIdx.y * blockDim.x + i,i * blockDim.x + threadIdx.x,i);
-              //  printf(" thread_1D_pos: %d other: %d\n",(blockIdx.y * blockDim.y + i) * numCols + blockIdx.x * blockDim.x + threadIdx.x,i * blockDim.x + threadIdx.x);
-                //ATX[threadIdx.y * blockDim.x + threadIdx.x] += DCTv8matrixT[threadIdx.y * blockDim.x + i] * red[blockIdx.x * blockDim.x + i * gridDim.x + threadIdx.x ];
+                
                 ATX[threadIdx.y * blockDim.x + threadIdx.x] += DCTv8matrixT[threadIdx.y * blockDim.x + i] * channel[(blockIdx.y * blockDim.y + i) * numCols + blockIdx.x * blockDim.x + threadIdx.x];
-        }       // account for the 8 rows in each block in red[]
-        __syncthreads(); // check if this for the threads in a block 
-
-        // check if this multiplcation is correct   
+        }      
+        __syncthreads(); 
 
 
 
         for (i = 0; i < N; ++i)
         {
-                 //printf("ATX[%d]:%f DCTv8matrix [%d]: %f\n",threadIdx.y * blockDim.x + i,ATX[threadIdx.y * blockDim.x + i], i * blockDim.x + threadIdx.x,DCTv8matrix [i * blockDim.x + threadIdx.x]);
+                
                  dct[thread_1D_pos] += ATX[threadIdx.y * blockDim.x + i] * DCTv8matrix [i * blockDim.x + threadIdx.x];
         }
 
         __syncthreads();
 
        
-       // dct[thread_1D_pos] *= quantizationTable[threadIdx.y * blockDim.x + threadIdx.x];
+        dct[thread_1D_pos] *= quantizationTable[threadIdx.y * blockDim.x + threadIdx.x];
         
+        __syncthreads();       
 
 
-    __syncthreads();
+
         for (i = 0; i < N*N; ++i)
         {
             ATX[i] = 0;
         }
 
          __syncthreads();
-    //     // y * column + x 
-    //     // y down 
-    //     // x right
+
 
         for (i = 0; i < N; ++i)
         {
-                // printf("-->threadIdx.x:%d threadIdx.y:%d index1: %d index2: %d  index3: %d i:%d\n",
-                //     threadIdx.x,threadIdx.y,threadIdx.y * blockDim.x + threadIdx.x,threadIdx.y * blockDim.x + i,i * blockDim.x + threadIdx.x,i);
-                //ATX[threadIdx.y * blockDim.x + threadIdx.x] += DCTv8matrixT[threadIdx.y * blockDim.x + i] * red[blockIdx.x * blockDim.x + i * gridDim.x + threadIdx.x ];
                 ATX[threadIdx.y * blockDim.x + threadIdx.x] += DCTv8matrix[threadIdx.y * blockDim.x + i] * dct[(blockIdx.y * blockDim.y + i) * numCols + blockIdx.x * blockDim.x + threadIdx.x];
-        }       // account for the 8 rows in each block in red[]
+        }       
 
         __syncthreads();
 
@@ -92,10 +81,7 @@ __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quan
                  idct[thread_1D_pos] += ATX[threadIdx.y * blockDim.x + i] * DCTv8matrixT[i * blockDim.x + threadIdx.x];
         }
 
-        // if(threadIdx.y == 0 || threadIdx.x ==0)
-        //     dct[threadIdx.y * blockDim.x + threadIdx.x] = dct[threadIdx.y * blockDim.x + threadIdx.x]/ (1.41);
-        // else
-        //      dct[threadIdx.y * blockDim.x + threadIdx.x] = dct[threadIdx.y * blockDim.x + threadIdx.x]/4;
+
 }
 
 
@@ -125,16 +111,6 @@ int main(int argc, char *argv[])
         float *red_idct = NULL;
         float *blue_idct = NULL;
         float *green_idct = NULL;
-
-
-        // unsigned char  *d_test = NULL;
-
-        // float *d_test_dct = NULL;
-        // float *d_test_idct = NULL;
-        // float *red_dct = NULL;
-
-        // float *test_dct = NULL;
-        // float *test_idct = NULL;
 
         float *d_quantizationTable = NULL;
 
@@ -179,7 +155,7 @@ int main(int argc, char *argv[])
         };
 
 
-        unsigned char  test[64] = {48,39,40,68,60,38,50,121,149,82,79,101,113,106,27,62,58,63,77,69,124,107,74,125,80,97,74,54,59,71,91,66,18,34,33,46,64,61,32,37,149,108,80,106,116,61,73,92,211,233,159,88,107,158,161,109,212,104,40,44,71,136,113,66};
+        //unsigned char  test[64] = {48,39,40,68,60,38,50,121,149,82,79,101,113,106,27,62,58,63,77,69,124,107,74,125,80,97,74,54,59,71,91,66,18,34,33,46,64,61,32,37,149,108,80,106,116,61,73,92,211,233,159,88,107,158,161,109,212,104,40,44,71,136,113,66};
 
         dim3 grid(64,64);            // defines a grid of 256 x 1 x 1 blocks
         dim3 block(8,8); 
@@ -207,29 +183,16 @@ int main(int argc, char *argv[])
 
 
 
-        for (i = 0; i < size * numColor; i+=3)
+        for (i = 0,j = 0; i < size * numColor; i+=3,++j)
         {
-                        blue[i] = image1->bitMapImage[i]; 
-                        green[i] = image1->bitMapImage[i + 1];
-                        red[i] = image1->bitMapImage[i + 2];
+                        blue[j] = image1->bitMapImage[i]; 
+                        green[j] = image1->bitMapImage[i + 1];
+                        red[j] = image1->bitMapImage[i + 2];
         }
 
         gpuErrchk( cudaMalloc( (void**)&d_red, size * sizeof(char) ));
         gpuErrchk( cudaMalloc( (void**)&d_green, size * sizeof(char) ));
         gpuErrchk( cudaMalloc( (void**)&d_blue, size * sizeof(char) ));
-
-
-
-        // gpuErrchk( cudaMalloc( (void**)&d_test_dct, 64 * sizeof(float) ));
-
-        // gpuErrchk( cudaMalloc( (void**)&d_test_idct, 64 * sizeof(float) ));
-
-        // gpuErrchk( cudaMemset(d_test_dct,value, 64 * sizeof(float)));
-
-        // gpuErrchk( cudaMemset(d_test_idct,value, 64 * sizeof(float)));
-
-        // gpuErrchk( cudaMalloc( (void**)&d_test, 64 * sizeof(unsigned char) ));
-
 
 
         gpuErrchk( cudaMalloc( (void**)&d_red_dct, size * sizeof(float) ));
@@ -263,14 +226,9 @@ int main(int argc, char *argv[])
         gpuErrchk(cudaMemcpy( d_DCTv8matrixT, &DCTv8matrixT, N * N * sizeof(float), cudaMemcpyHostToDevice ));
         gpuErrchk(cudaMemcpy( d_quantizationTable, &quantizationTable, N * N * sizeof(float), cudaMemcpyHostToDevice ));
 
-        // dct<<< grid, block >>>(d_red, d_red_dct, image1->infoHeader.height,
-        //                         image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
-
         dct<<<  grid, block >>>(d_red, d_red_dct, d_red_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
         dct<<<  grid, block >>>(d_green, d_green_dct, d_green_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
         dct<<<  grid, block >>>(d_blue, d_blue_dct, d_blue_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
-
-        //gpuErrchk(cudaMemcpy( &red_dct, d_red_dct, size * sizeof(float), cudaMemcpyDeviceToHost ));
 
         gpuErrchk(cudaMemcpy(red_dct, d_red_dct , size * sizeof(float), cudaMemcpyDeviceToHost ));
         gpuErrchk(cudaMemcpy(red_idct, d_red_idct, size * sizeof(float), cudaMemcpyDeviceToHost ));
@@ -283,52 +241,31 @@ int main(int argc, char *argv[])
         
 
 
-        for (i = 0; i < size * numColor; i+=3)
+        for (i = 0,j = 0; j < size; i+=3,++j)
         {
 
                // printf("%f %f %f\n",blue_idct[i],red_idct[i],green_idct[i]);
-                if(blue_idct[i] > 255)
+                if(blue_idct[j] > 255)
                     image1->bitMapImage[i] = 255;
-                else if(blue_idct[i] < 0)
+                else if(blue_idct[j] < 0)
                     image1->bitMapImage[i] = 0;
                 else
-                    image1->bitMapImage[i] = (unsigned char)blue_idct[i];
+                    image1->bitMapImage[i] = (unsigned char)blue_idct[j];
 
-                if(green_idct[i] > 255)
+                if(green_idct[j] > 255)
                     image1->bitMapImage[i + 1] = 255;
-                else if(green_idct[i] < 0)
+                else if(green_idct[j] < 0)
                     image1->bitMapImage[i + 1] = 0;
                 else
-                    image1->bitMapImage[i + 1] = (unsigned char) green_idct[i]; 
+                    image1->bitMapImage[i + 1] = (unsigned char) green_idct[j]; 
 
-                if(red_idct[i] > 255)
+                if(red_idct[j] > 255)
                     image1->bitMapImage[i + 2] = 255;
-                else if(red_idct[i] < 0)
+                else if(red_idct[j] < 0)
                     image1->bitMapImage[i + 2] = 0;
                 else
-                    image1->bitMapImage[i + 2] = (unsigned char) red_idct[i]; 
+                    image1->bitMapImage[i + 2] = (unsigned char) red_idct[j]; 
         }
-
-        // for (i = 0; i < image1->infoHeader.height ; ++i)
-        // // {
-        // //         for (j = 0; j < image1->infoHeader.width ; ++j)
-        // //                 printf("%c ",red_dct[i*image1->infoHeader.height + j ]);
-        // for (i = 0; i < 8 ; ++i)
-        // {
-        //         for (j = 0; j < 8 ; ++j)
-        //                 printf("%d ",test[i*8 + j ]);
-        //         printf("\n");
-        // }
-
-        // // printf("\n\n");
-
-        // for (i = 0; i < 8 ; ++i)
-        // {
-        //         for (j = 0; j < 8 ; ++j)
-        //                 printf("%f ",test_idct[i*8 + j ]);
-        //         printf("\n");
-        // }
-
         if(writeBMPfile(image1,"dctCompress.bmp") != 1)
         {
             printf("Error Writing File\n");

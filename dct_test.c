@@ -8,7 +8,6 @@
 
 
 // gpu function call wrapper 
-
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -19,6 +18,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
+// go through this - http://cuda-programming.blogspot.in/2013/01/handling-cuda-error-messages.html
 
 __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quantizationTable, int numRowsint, int numCols, float *DCTv8matrix, float *DCTv8matrixT )
 {
@@ -29,7 +29,6 @@ __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quan
 
         
         int i = 0;
-        float temp = 0;
         __shared__ float ATX[N*N];
         for (i = 0; i < N*N; ++i)
         {
@@ -38,28 +37,30 @@ __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quan
 
         __syncthreads();
 
-        printf("id: %d\n",thread_1D_pos);
         for (i = 0; i < N; ++i)
         {
-                // printf("-->threadIdx.x:%d threadIdx.y:%d index1: %d index2: %d  index3: %d i:%d\n",
-                //     threadIdx.x,threadIdx.y,threadIdx.y * blockDim.x + threadIdx.x,threadIdx.y * blockDim.x + i,i * blockDim.x + threadIdx.x,i);
-              //  printf(" thread_1D_pos: %d other: %d\n",(blockIdx.y * blockDim.y + i) * numCols + blockIdx.x * blockDim.x + threadIdx.x,i * blockDim.x + threadIdx.x);
-                //ATX[threadIdx.y * blockDim.x + threadIdx.x] += DCTv8matrixT[threadIdx.y * blockDim.x + i] * red[blockIdx.x * blockDim.x + i * gridDim.x + threadIdx.x ];
+                
                 ATX[threadIdx.y * blockDim.x + threadIdx.x] += DCTv8matrixT[threadIdx.y * blockDim.x + i] * channel[(blockIdx.y * blockDim.y + i) * numCols + blockIdx.x * blockDim.x + threadIdx.x];
-        }       // account for the 8 rows in each block in red[]
-        __syncthreads(); // check if this for the threads in a block 
-
+        }      
+        __syncthreads(); 
 
 
 
         for (i = 0; i < N; ++i)
         {
-                 //printf("ATX[%d]:%f DCTv8matrix [%d]: %f\n",threadIdx.y * blockDim.x + i,ATX[threadIdx.y * blockDim.x + i], i * blockDim.x + threadIdx.x,DCTv8matrix [i * blockDim.x + threadIdx.x]);
+                
                  dct[thread_1D_pos] += ATX[threadIdx.y * blockDim.x + i] * DCTv8matrix [i * blockDim.x + threadIdx.x];
         }
 
         __syncthreads();
+
+       
+        dct[thread_1D_pos] *= quantizationTable[threadIdx.y * blockDim.x + threadIdx.x];
         
+        __syncthreads();       
+
+
+
         for (i = 0; i < N*N; ++i)
         {
             ATX[i] = 0;
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
         };
 
 
-        unsigned char  test[64] = {48,39,40,68,60,38,50,121,149,82,79,101,113,106,27,62,58,63,77,69,124,107,74,125,80,97,74,54,59,71,91,66,18,34,33,46,64,61,32,37,149,108,80,106,116,61,73,92,211,233,159,88,107,158,161,109,212,104,40,44,71,136,113,66};
+        //unsigned char  test[64] = {48,39,40,68,60,38,50,121,149,82,79,101,113,106,27,62,58,63,77,69,124,107,74,125,80,97,74,54,59,71,91,66,18,34,33,46,64,61,32,37,149,108,80,106,116,61,73,92,211,233,159,88,107,158,161,109,212,104,40,44,71,136,113,66};
 
         dim3 grid(64,64);            // defines a grid of 256 x 1 x 1 blocks
         dim3 block(8,8); 
@@ -182,11 +183,11 @@ int main(int argc, char *argv[])
 
 
 
-        for (i = 0; i < size * numColor; i+=3)
+        for (i = 0,j = 0; i < size * numColor; i+=3,++j)
         {
-                        blue[i] = image1->bitMapImage[i]; 
-                        green[i] = image1->bitMapImage[i + 1];
-                        red[i] = image1->bitMapImage[i + 2];
+                        blue[j] = image1->bitMapImage[i]; 
+                        green[j] = image1->bitMapImage[i + 1];
+                        red[j] = image1->bitMapImage[i + 2];
         }
 
         gpuErrchk( cudaMalloc( (void**)&d_red, size * sizeof(char) ));
@@ -240,30 +241,30 @@ int main(int argc, char *argv[])
         
 
 
-        for (i = 0; i < size * numColor; i+=3)
+        for (i = 0,j = 0; j < size; i+=3,++j)
         {
 
                // printf("%f %f %f\n",blue_idct[i],red_idct[i],green_idct[i]);
-                if(blue_idct[i] > 255)
+                if(blue_idct[j] > 255)
                     image1->bitMapImage[i] = 255;
-                else if(blue_idct[i] < 0)
+                else if(blue_idct[j] < 0)
                     image1->bitMapImage[i] = 0;
                 else
-                    image1->bitMapImage[i] = (unsigned char)blue_idct[i];
+                    image1->bitMapImage[i] = (unsigned char)blue_idct[j];
 
-                if(green_idct[i] > 255)
+                if(green_idct[j] > 255)
                     image1->bitMapImage[i + 1] = 255;
-                else if(green_idct[i] < 0)
+                else if(green_idct[j] < 0)
                     image1->bitMapImage[i + 1] = 0;
                 else
-                    image1->bitMapImage[i + 1] = (unsigned char) green_idct[i]; 
+                    image1->bitMapImage[i + 1] = (unsigned char) green_idct[j]; 
 
-                if(red_idct[i] > 255)
+                if(red_idct[j] > 255)
                     image1->bitMapImage[i + 2] = 255;
-                else if(red_idct[i] < 0)
+                else if(red_idct[j] < 0)
                     image1->bitMapImage[i + 2] = 0;
                 else
-                    image1->bitMapImage[i + 2] = (unsigned char) red_idct[i]; 
+                    image1->bitMapImage[i + 2] = (unsigned char) red_idct[j]; 
         }
         if(writeBMPfile(image1,"dctCompress.bmp") != 1)
         {
