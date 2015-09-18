@@ -1,2 +1,2 @@
-cp dct_test.c dct.cu
+cp dct.c dct.cu
 sshpass -p Thanks@123 scp dct.cu administrator@192.168.4.100:/home/administrator/abel/pe

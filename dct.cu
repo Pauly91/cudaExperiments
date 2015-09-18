@@ -20,7 +20,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 // go through this - http://cuda-programming.blogspot.in/2013/01/handling-cuda-error-messages.html
 
-__global__ void dct(unsigned char *channel, float *dct, float *idct, float *quantizationTable, int numRowsint, int numCols, float *DCTv8matrix, float *DCTv8matrixT )
+__global__ void dct(unsigned char *channel, float *dct, float *idct, float *quantizationTable, int numRowsint, int numCols, float const *DCTv8matrix, float const *DCTv8matrixT )
 {
         const int2 thread_2D_pos = make_int2( blockIdx.x * blockDim.x + threadIdx.x,
                                                 blockIdx.y * blockDim.y + threadIdx.y);
@@ -90,6 +90,8 @@ int main(int argc, char *argv[])
 
 
         BMPData *image1 = NULL;
+        FILE *fp;
+        char *remark = "With No Optimazation";
         int i = 0,j = 0;
         int size = 0;
         unsigned char *red = NULL,*green = NULL,*blue = NULL;
@@ -117,6 +119,10 @@ int main(int argc, char *argv[])
 
         float *d_DCTv8matrix = NULL;
         float *d_DCTv8matrixT = NULL;
+
+        float time;
+
+        cudaEvent_t start, stop;
 
         const int value = 0;
 
@@ -226,9 +232,17 @@ int main(int argc, char *argv[])
         gpuErrchk(cudaMemcpy( d_DCTv8matrixT, &DCTv8matrixT, N * N * sizeof(float), cudaMemcpyHostToDevice ));
         gpuErrchk(cudaMemcpy( d_quantizationTable, &quantizationTable, N * N * sizeof(float), cudaMemcpyHostToDevice ));
 
+        gpuErrchk( cudaEventCreate(&start) );
+        gpuErrchk( cudaEventCreate(&stop) );
+        gpuErrchk( cudaEventRecord(start, 0) );
+
         dct<<<  grid, block >>>(d_red, d_red_dct, d_red_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
         dct<<<  grid, block >>>(d_green, d_green_dct, d_green_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
         dct<<<  grid, block >>>(d_blue, d_blue_dct, d_blue_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
+
+        gpuErrchk( cudaEventRecord(stop, 0) );
+        gpuErrchk( cudaEventSynchronize(stop) );
+        gpuErrchk( cudaEventElapsedTime(&time, start, stop) );
 
         gpuErrchk(cudaMemcpy(red_dct, d_red_dct , size * sizeof(float), cudaMemcpyDeviceToHost ));
         gpuErrchk(cudaMemcpy(red_idct, d_red_idct, size * sizeof(float), cudaMemcpyDeviceToHost ));
@@ -295,7 +309,15 @@ int main(int argc, char *argv[])
         gpuErrchk(cudaFree( d_DCTv8matrix ));
         gpuErrchk(cudaFree( d_DCTv8matrixT ));
         gpuErrchk(cudaFree( d_quantizationTable ));
-        
+
+        printf("Time to generate:  %3.1f ms \n", time);
+        if((fp = fopen("timingInformation","a+")) == NULL)
+        {
+            printf("File opening has failed\n");
+            return -1;
+        }
+        fprintf(fp, "%s: %f\n",remark,time);
+        fclose(fp);
         return 0;
 
 

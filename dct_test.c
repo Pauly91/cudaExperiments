@@ -118,6 +118,9 @@ int main(int argc, char *argv[])
         float *d_DCTv8matrix = NULL;
         float *d_DCTv8matrixT = NULL;
 
+        float time;
+        cudaEvent_t start, stop;
+
         const int value = 0;
 
         const float DCTv8matrix[N*N] = {
@@ -226,9 +229,17 @@ int main(int argc, char *argv[])
         gpuErrchk(cudaMemcpy( d_DCTv8matrixT, &DCTv8matrixT, N * N * sizeof(float), cudaMemcpyHostToDevice ));
         gpuErrchk(cudaMemcpy( d_quantizationTable, &quantizationTable, N * N * sizeof(float), cudaMemcpyHostToDevice ));
 
+        gpuErrchk( cudaEventCreate(&start) );
+        gpuErrchk( cudaEventCreate(&stop) );
+        gpuErrchk( cudaEventRecord(start, 0) );
+
         dct<<<  grid, block >>>(d_red, d_red_dct, d_red_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
         dct<<<  grid, block >>>(d_green, d_green_dct, d_green_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
         dct<<<  grid, block >>>(d_blue, d_blue_dct, d_blue_idct,d_quantizationTable, image1->infoHeader.height,image1->infoHeader.width, d_DCTv8matrix, d_DCTv8matrixT);
+
+        gpuErrchk( cudaEventRecord(stop, 0) );
+        gpuErrchk( cudaEventSynchronize(stop) );
+        gpuErrchk( cudaEventElapsedTime(&time, start, stop) );
 
         gpuErrchk(cudaMemcpy(red_dct, d_red_dct , size * sizeof(float), cudaMemcpyDeviceToHost ));
         gpuErrchk(cudaMemcpy(red_idct, d_red_idct, size * sizeof(float), cudaMemcpyDeviceToHost ));
@@ -295,6 +306,8 @@ int main(int argc, char *argv[])
         gpuErrchk(cudaFree( d_DCTv8matrix ));
         gpuErrchk(cudaFree( d_DCTv8matrixT ));
         gpuErrchk(cudaFree( d_quantizationTable ));
+
+        printf("Time to generate:  %3.1f ms \n", time);
         
         return 0;
 

@@ -120,27 +120,34 @@ void colourVector2MatrixConverter(unsigned char ** red,unsigned char ** green,un
 void rgb2yuv(unsigned char ** red,unsigned char ** green,unsigned char ** blue, unsigned char ** Y,unsigned char ** U,unsigned char ** V,int height, int width)
 {
 	int i,j;
+	int value;
 	for (i = 0; i < height; ++i)
 	{
 		for (j = 0; j < width; ++j)
 		{
-			Y[i][j] = red[i][j] * 0.2999 + green[i][j] * 0.587 + blue[i][j] * 0.114;  
-			if(Y[i][j] > 255)
+			value = red[i][j] * 0.2999 + green[i][j] * 0.587 + blue[i][j] * 0.114;  
+			if(value > 255)
 				Y[i][j] = 255;
-			if(Y[i][j] < 0)
+			else if(value < 0)
 				Y[i][j] = 0;
+			else
+				Y[i][j] = (unsigned char) value; 
 
-			U[i][j] = red[i][j] * (-0.168736) + green[i][j] * (-0.331264) + blue[i][j] * (0.500002) + 128;
-			if(U[i][j] > 255)
+			value = red[i][j] * (-0.168736) + green[i][j] * (-0.331264) + blue[i][j] * (0.500002) + 128;
+			if(value > 255)
 				U[i][j] = 255;
-			if(U[i][j] < 0)
+			else if(value < 0)
 				U[i][j] = 0;
+			else
+				U[i][j] = (unsigned char) value; 
 
-			V[i][j] = red[i][j] * 0.5 + green[i][j] * (-0.418688) + blue[i][j] * (-0.081312) + 128;
-			if(V[i][j] > 255)
+			value = red[i][j] * 0.5 + green[i][j] * (-0.418688) + blue[i][j] * (-0.081312) + 128;
+			if(value > 255)
 				V[i][j] = 255;
-			if(V[i][j] < 0)
-				V[i][j] = 0; 			
+			else if(value < 0)
+				V[i][j] = 0;
+			else
+				V[i][j] = (unsigned char) value; 			
 		}
 	}
 
@@ -148,29 +155,37 @@ void rgb2yuv(unsigned char ** red,unsigned char ** green,unsigned char ** blue, 
 
 
 void yuv2rgb(unsigned char ** red,unsigned char ** green,unsigned char ** blue, unsigned char ** Y,unsigned char ** U,unsigned char ** V,int height, int width)
-{
+{	
 	int i,j;
+	int value;
 	for (i = 0; i < height; ++i)
 	{
 		for (j = 0; j < width; ++j)
 		{
-			red[i][j] = Y[i][j] + (V[i][j] - 128 )* 1.4021;  
-			if(red[i][j] > 255)
+			value = Y[i][j] + (V[i][j] - 128 )* 1.4021;  
+			if(value > 255)
 				red[i][j] = 255;
-			if(red[i][j] < 0)
+			else if(value < 0)
 				red[i][j] = 0;
+			else
+				red[i][j] = (unsigned char) value;
 
-			green[i][j] = Y[i][j] + (U[i][j] - 128 ) * (-0.34414) + (V[i][j] - 128) * (-0.71414);  
-			if(green[i][j] > 255)
+			value = Y[i][j] + (U[i][j] - 128 ) * (-0.34414) + (V[i][j] - 128) * (-0.71414);  
+			if(value > 255)
 				green[i][j] = 255;
-			if(green[i][j] < 0)
+			else if(value < 0)
 				green[i][j] = 0;
+			else
+				green[i][j] = (unsigned char) value;
 
-			blue[i][j] = Y[i][j] + (U[i][j] - 128) * 1.77180;
-			if(blue[i][j] > 255)
+			value = Y[i][j] + (U[i][j] - 128) * 1.77180;
+			if(value > 255)
 				blue[i][j] = 255;
-			if(blue[i][j] < 0)
-				blue[i][j] = 0; 			
+			else if(value < 0)
+				blue[i][j] = 0;
+			else
+				blue[i][j] = (unsigned char) value;
+
 		}
 	}
 
