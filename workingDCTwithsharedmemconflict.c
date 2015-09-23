@@ -31,64 +31,76 @@ __global__ void dct(unsigned char *channel, float *dct, float *idct, float *quan
         int i = 0;
         __shared__ float ATX[N][N];
 
-        __shared__ float sQuantizationTable[N][N+1]; // avoids bank conflict
-        __shared__ float sDCTv8matrix[N][N+1];
-        __shared__ float sDCTv8matrixT[N][N+1];
-        __shared__ float channelData[N][N+1];
-        __shared__ float Sdct[N][N+1];
+        __shared__ float sQuantizationTable[N][N];
+        __shared__ float sDCTv8matrix[N][N];
+        __shared__ float sDCTv8matrixT[N][N];
+        __shared__ float channelData[N][N];
+        __shared__ float Sdct[N][N];
 
-        float temp = 0;
+
         //for (i = 0; i < N*N; ++i)
         //{
         ATX[threadIdx.y][threadIdx.x] = 0;
-        Sdct[threadIdx.y][threadIdx.x] = 0;
-
         sQuantizationTable[threadIdx.y][threadIdx.x] = quantizationTable[threadIdx.y * blockDim.x + threadIdx.x];
         sDCTv8matrix[threadIdx.y][threadIdx.x] = DCTv8matrix[threadIdx.y * blockDim.x + threadIdx.x];
         sDCTv8matrixT[threadIdx.y][threadIdx.x] = DCTv8matrixT[threadIdx.y * blockDim.x + threadIdx.x];
-        channelData[threadIdx.y][threadIdx.x] = channel[thread_1D_pos];
-        
+        channelData[threadIdx.y][threadIdx.x] = channel[(blockIdx.y * blockDim.y + threadIdx.y) * numCols + blockIdx.x * blockDim.x + threadIdx.x];
+        Sdct[threadIdx.y][threadIdx.x] = 0;
         //}
 
         __syncthreads();
 
         for (i = 0; i < N; ++i) // looping over shared mem is a prob - bank conflict ?
-        {           
-               temp += sDCTv8matrix[i][threadIdx.y] * channelData[i][threadIdx.x];
-        }      
-         ATX[threadIdx.x][threadIdx.y] = temp;
-         __syncthreads(); 
-
-
-         temp = 0;
-        for (i = 0; i < N; ++i) 
         {
                 
-               temp  += ATX[i][threadIdx.y] * sDCTv8matrix[i][threadIdx.x];
+                ATX[threadIdx.x][threadIdx.y] += sDCTv8matrix[i][threadIdx.y] * channelData[i][threadIdx.x];
 
-    
-        }
-        Sdct[threadIdx.y][threadIdx.x] = temp * sQuantizationTable[threadIdx.y][threadIdx.x];;
-        ATX[threadIdx.y][threadIdx.x] = 0;
-        temp = 0;
-       __syncthreads();
+                //ATX[threadIdx.y * blockDim.x + threadIdx.x] += sDCTv8matrixT[threadIdx.y * blockDim.x + i] * channel[(blockIdx.y * blockDim.y + i) * numCols + blockIdx.x * blockDim.x + threadIdx.x];
+                //__syncthreads(); // check if this is feasible 
+        }      
+        __syncthreads(); 
 
 
 
         for (i = 0; i < N; ++i) // looping over shared mem is a prob - bank conflict ?
         {
-                temp += sDCTv8matrixT[i][threadIdx.y] * Sdct[i][threadIdx.x];
+                
+                Sdct[threadIdx.y][threadIdx.x] += ATX[i][threadIdx.y] * sDCTv8matrix [i][threadIdx.x];
+
+                 //dct[thread_1D_pos] += ATX[threadIdx.y * blockDim.x + i] * sDCTv8matrix [i * blockDim.x + threadIdx.x];
+        }
+
+        __syncthreads();
+
+       
+        Sdct[threadIdx.y][threadIdx.x] *= sQuantizationTable[threadIdx.y][threadIdx.x];
+        //dct[thread_1D_pos] *= sQuantizationTable[threadIdx.y * blockDim.x + threadIdx.x];
+        //__syncthreads();       
+
+
+
+        // for (i = 0; i < N*N; ++i)
+        // {
+        //     ATX[i] = 0;
+        // }
+        ATX[threadIdx.y][threadIdx.x] = 0;
+
+         __syncthreads();
+
+
+        for (i = 0; i < N; ++i) // looping over shared mem is a prob - bank conflict ?
+        {
+                ATX[threadIdx.x][threadIdx.y] += sDCTv8matrixT[i][threadIdx.y] * Sdct[i][threadIdx.x];
         }       
-        ATX[threadIdx.x][threadIdx.y] = temp;
-        temp = 0;   
+
         __syncthreads();
 
         for (i = 0; i < N; ++i) // looping over shared mem is a prob - bank conflict ?
         {
-                 temp += ATX[i][threadIdx.y] * sDCTv8matrixT[i][threadIdx.x];
+                 idct[thread_1D_pos] += ATX[i][threadIdx.y] * sDCTv8matrixT[i][threadIdx.x];
                  //idct[thread_1D_pos] += ATX[threadIdx.y * blockDim.x + i] * sDCTv8matrix[threadIdx.y * blockDim.x + i];
         }
-        idct[thread_1D_pos] = temp;
+
 
 }
 
@@ -99,6 +111,7 @@ int main(int argc, char *argv[])
 
         BMPData *image1 = NULL;
         FILE *fp;
+        char *remark = "Making cosine and Quant Tables with streams with channel data in shared mem";
         int i = 0,j = 0;
         int size = 0;
         unsigned char *red = NULL,*green = NULL,*blue = NULL;
@@ -187,7 +200,8 @@ int main(int argc, char *argv[])
 
         //unsigned char  test[64] = {48,39,40,68,60,38,50,121,149,82,79,101,113,106,27,62,58,63,77,69,124,107,74,125,80,97,74,54,59,71,91,66,18,34,33,46,64,61,32,37,149,108,80,106,116,61,73,92,211,233,159,88,107,158,161,109,212,104,40,44,71,136,113,66};
 
-
+        dim3 grid(64,64);            // defines a grid of 256 x 1 x 1 blocks
+        dim3 block(8,8); 
 
         // increase occupancy - use bigger images 
 
@@ -204,8 +218,6 @@ int main(int argc, char *argv[])
 
         size = image1->infoHeader.height * image1->infoHeader.width;
         //size = 64;
-        dim3 grid(image1->infoHeader.width/N,image1->infoHeader.height/N);            // defines a grid of 256 x 1 x 1 blocks
-        dim3 block(N,N); 
         red = (unsigned char *) malloc(size * sizeof(char) );
         blue = (unsigned char *) malloc(size * sizeof(char) );
         green = (unsigned char *) malloc(size * sizeof(char) );
@@ -356,7 +368,7 @@ int main(int argc, char *argv[])
             printf("File opening has failed\n");
             return -1;
         }
-        fprintf(fp, "Image Size: %d * %d Time:%f\n",image1->infoHeader.height,image1->infoHeader.width,time);
+        fprintf(fp, "%s: %f\n",remark,time);
         fclose(fp);
         gpuErrchk(cudaDeviceReset());
         return 0;
